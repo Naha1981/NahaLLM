@@ -1,4 +1,5 @@
 from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,7 +8,9 @@ class Settings(BaseSettings):
 
     nahallm_api_keys: str = ""
     nahallm_request_timeout_seconds: float = 45.0
-    nahallm_max_retries_per_provider: int = 0
+    nahallm_max_retries_per_provider: int = 1
+    nahallm_circuit_failure_threshold: int = 3
+    nahallm_circuit_cooldown_seconds: float = 30.0
 
     groq_api_key: str = ""
     groq_base_url: str = "https://api.groq.com/openai/v1"
