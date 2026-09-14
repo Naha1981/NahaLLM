@@ -2,6 +2,8 @@ import os
 
 os.environ["NAHALLM_API_KEYS"] = "test-key"
 os.environ["GROQ_API_KEY"] = "test-provider-key"
+os.environ["NAHALLM_CIRCUIT_FAILURE_THRESHOLD"] = "3"
+os.environ["NAHALLM_CIRCUIT_COOLDOWN_SECONDS"] = "30"
 
 from fastapi.testclient import TestClient
 
@@ -42,14 +44,18 @@ def test_invalid_alias():
     response = client.post(
         "/v1/chat/completions",
         headers={"Authorization": "Bearer test-key"},
-        json={"model": "unknown", "messages":[{"role":"user","content":"hi"}]},
+        json={"model": "unknown", "messages": [{"role": "user", "content": "hi"}]},
     )
     assert response.status_code == 400
 
 
-def test_provider_fallback(monkeypatch):
-    from app.main import get_settings
+def test_provider_status_requires_auth():
+    response = client.get("/v1/providers", headers={"Authorization": "Bearer test-key"})
+    assert response.status_code == 200
+    assert "groq" in response.json()["providers"]
 
+
+def test_provider_fallback(monkeypatch):
     class FakeResponse:
         status_code = 200
 
@@ -59,10 +65,6 @@ def test_provider_fallback(monkeypatch):
                 "object": "chat.completion",
                 "choices": [{"index": 0, "message": {"role": "assistant", "content": "hello"}, "finish_reason": "stop"}],
             }
-
-        @property
-        def text(self):
-            return ""
 
     calls = []
 
@@ -85,7 +87,7 @@ def test_provider_fallback(monkeypatch):
     response = client.post(
         "/v1/chat/completions",
         headers={"Authorization": "Bearer test-key"},
-        json={"model": "fast", "messages":[{"role":"user","content":"hi"}]},
+        json={"model": "fast", "messages": [{"role": "user", "content": "hi"}]},
     )
     assert response.status_code == 200
-    assert calls == ["first", "second"]
+    assert calls == ["first", "first", "second"]
