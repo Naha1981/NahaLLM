@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -47,23 +48,58 @@ def configured_providers(settings: Settings, alias: str) -> list[Provider]:
     return [p for p in candidates.get(alias, []) if p.api_key and p.model]
 
 
+def _upstream_payload(provider: Provider, payload: dict[str, Any]) -> dict[str, Any]:
+    upstream_payload = dict(payload)
+    upstream_payload["model"] = provider.model
+    return upstream_payload
+
+
+def _headers(provider: Provider) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {provider.api_key}",
+        "Content-Type": "application/json",
+    }
+
+
 async def chat_completion(
     provider: Provider,
     payload: dict[str, Any],
     settings: Settings,
 ) -> httpx.Response:
-    headers = {
-        "Authorization": f"Bearer {provider.api_key}",
-        "Content-Type": "application/json",
-    }
-    upstream_payload = dict(payload)
-    upstream_payload["model"] = provider.model
     try:
         async with httpx.AsyncClient(timeout=settings.nahallm_request_timeout_seconds) as client:
             return await client.post(
                 provider.base_url.rstrip("/") + "/chat/completions",
-                headers=headers,
-                json=upstream_payload,
+                headers=_headers(provider),
+                json=_upstream_payload(provider, payload),
             )
     except httpx.HTTPError as exc:
         raise ProviderError(provider.name, None, str(exc)) from exc
+
+
+async def stream_chat_completion(
+    provider: Provider,
+    payload: dict[str, Any],
+    settings: Settings,
+) -> AsyncIterator[bytes]:
+    client = httpx.AsyncClient(timeout=settings.nahallm_request_timeout_seconds)
+    response: httpx.Response | None = None
+    try:
+        request = client.build_request(
+            "POST",
+            provider.base_url.rstrip("/") + "/chat/completions",
+            headers=_headers(provider),
+            json=_upstream_payload(provider, payload),
+        )
+        response = await client.send(request, stream=True)
+        if response.status_code >= 400:
+            detail = (await response.aread())[:1000].decode("utf-8", errors="replace")
+            raise ProviderError(provider.name, response.status_code, detail)
+        async for chunk in response.aiter_bytes():
+            yield chunk
+    except httpx.HTTPError as exc:
+        raise ProviderError(provider.name, None, str(exc)) from exc
+    finally:
+        if response is not None:
+            await response.aclose()
+        await client.aclose()
