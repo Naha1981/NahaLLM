@@ -2,6 +2,7 @@ import hashlib
 import logging
 import time
 import uuid
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -15,7 +16,13 @@ from .providers import ProviderError, chat_completion, close_http_client, config
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("nahallm")
 
-app = FastAPI(title="NahaLLM", version="0.3.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    await close_http_client()
+
+
+app = FastAPI(title="NahaLLM", version="0.3.0", lifespan=lifespan)
 
 
 class ChatRequest(BaseModel):
@@ -27,10 +34,6 @@ class ChatRequest(BaseModel):
 
 breaker = CircuitBreaker()
 
-
-@app.on_event("shutdown")
-async def shutdown() -> None:
-    await close_http_client()
 
 
 def authenticate(authorization: str | None = Header(default=None)) -> str:
