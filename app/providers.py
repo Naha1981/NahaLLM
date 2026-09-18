@@ -23,6 +23,23 @@ class ProviderError(Exception):
         super().__init__(detail)
 
 
+_http_client: httpx.AsyncClient | None = None
+
+
+def http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient()
+    return _http_client
+
+
+async def close_http_client() -> None:
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
+
+
 def configured_providers(settings: Settings, alias: str) -> list[Provider]:
     candidates = {
         "fast": [
@@ -67,12 +84,13 @@ async def chat_completion(
     settings: Settings,
 ) -> httpx.Response:
     try:
-        async with httpx.AsyncClient(timeout=settings.nahallm_request_timeout_seconds) as client:
-            return await client.post(
-                provider.base_url.rstrip("/") + "/chat/completions",
-                headers=_headers(provider),
-                json=_upstream_payload(provider, payload),
-            )
+        client = http_client()
+        return await client.post(
+            provider.base_url.rstrip("/") + "/chat/completions",
+            headers=_headers(provider),
+            json=_upstream_payload(provider, payload),
+            timeout=settings.nahallm_request_timeout_seconds,
+        )
     except httpx.HTTPError as exc:
         raise ProviderError(provider.name, None, str(exc)) from exc
 
@@ -82,7 +100,7 @@ async def stream_chat_completion(
     payload: dict[str, Any],
     settings: Settings,
 ) -> AsyncIterator[bytes]:
-    client = httpx.AsyncClient(timeout=settings.nahallm_request_timeout_seconds)
+    client = http_client()
     response: httpx.Response | None = None
     try:
         request = client.build_request(
@@ -90,6 +108,7 @@ async def stream_chat_completion(
             provider.base_url.rstrip("/") + "/chat/completions",
             headers=_headers(provider),
             json=_upstream_payload(provider, payload),
+            timeout=settings.nahallm_request_timeout_seconds,
         )
         response = await client.send(request, stream=True)
         if response.status_code >= 400:
@@ -102,4 +121,3 @@ async def stream_chat_completion(
     finally:
         if response is not None:
             await response.aclose()
-        await client.aclose()

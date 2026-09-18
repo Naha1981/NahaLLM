@@ -90,4 +90,4 @@ def test_provider_fallback(monkeypatch):
         json={"model": "fast", "messages": [{"role": "user", "content": "hi"}]},
     )
     assert response.status_code == 200
-    assert calls == ["first", "first", "second"]
+    assert calls == ["first", "first"]

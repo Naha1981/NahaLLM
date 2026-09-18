@@ -2,6 +2,7 @@ import hashlib
 import logging
 import time
 import uuid
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -10,12 +11,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .circuit_breaker import CircuitBreaker
 from .config import get_settings
-from .providers import ProviderError, chat_completion, configured_providers, stream_chat_completion
+from .providers import ProviderError, chat_completion, close_http_client, configured_providers, stream_chat_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("nahallm")
 
-app = FastAPI(title="NahaLLM", version="0.2.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    await close_http_client()
+
+
+app = FastAPI(title="NahaLLM", version="0.3.0", lifespan=lifespan)
 
 
 class ChatRequest(BaseModel):
@@ -26,6 +33,7 @@ class ChatRequest(BaseModel):
 
 
 breaker = CircuitBreaker()
+
 
 
 def authenticate(authorization: str | None = Header(default=None)) -> str:
