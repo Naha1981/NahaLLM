@@ -24,16 +24,17 @@ async def test_media_submit_and_poll(monkeypatch):
 
     calls = []
 
-    async def fake_post(*args, **kwargs):
-        calls.append(("post", args, kwargs))
-        return httpx.Response(200, json={"job_id": "spyce-123", "status": "queued"})
+    class FakeClient:
+        async def post(self, *args, **kwargs):
 
-    async def fake_get(*args, **kwargs):
-        calls.append(("get", args, kwargs))
-        return httpx.Response(200, json={"status": "completed", "video_url": "https://cdn.example/video.mp4"})
+            calls.append(("post", args, kwargs))
+            return httpx.Response(200, json={"job_id": "spyce-123", "status": "queued"})
 
-    monkeypatch.setattr("app.media.http_client().post", fake_post, raising=False)
-    monkeypatch.setattr("app.media.http_client().get", fake_get, raising=False)
+        async def get(self, *args, **kwargs):
+            calls.append(("get", args, kwargs))
+            return httpx.Response(200, json={"status": "completed", "video_url": "https://cdn.example/video.mp4"})
+
+    monkeypatch.setattr("app.media.http_client", lambda: FakeClient())
 
     job = await submit_image_to_video(
         image_url="https://cdn.example/input.jpg",
