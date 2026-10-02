@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .circuit_breaker import CircuitBreaker
 from .config import get_settings
+from .media import MediaProviderError, get_image_to_video_job, media_enabled, submit_image_to_video
 from .providers import ProviderError, chat_completion, close_http_client, configured_providers, stream_chat_completion
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -22,7 +23,17 @@ async def lifespan(_app: FastAPI):
     await close_http_client()
 
 
-app = FastAPI(title="NahaLLM", version="0.3.0", lifespan=lifespan)
+app = FastAPI(title="NahaLLM", version="0.4.0", lifespan=lifespan)
+
+
+class ImageToVideoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    image_url: str = Field(min_length=1, max_length=4096)
+    prompt: str = Field(min_length=1, max_length=4000)
+    model: str | None = None
+    duration_seconds: float | None = Field(default=None, gt=0, le=30)
+    aspect_ratio: str | None = Field(default=None, max_length=20)
+    resolution: str | None = Field(default=None, max_length=30)
 
 
 class ChatRequest(BaseModel):
@@ -33,7 +44,6 @@ class ChatRequest(BaseModel):
 
 
 breaker = CircuitBreaker()
-
 
 
 def authenticate(authorization: str | None = Header(default=None)) -> str:
@@ -74,6 +84,7 @@ async def ready() -> JSONResponse:
         "mistral": bool(settings.mistral_api_key),
         "openrouter": bool(settings.openrouter_api_key and settings.openrouter_model_premium),
     }
+    providers["nahamedia_spyce_i2v"] = media_enabled(settings)
     ready_state = any(providers.values()) and bool(settings.api_keys)
     return JSONResponse(status_code=200 if ready_state else 503, content={"status": "ready" if ready_state else "not_ready", "providers": providers})
 
@@ -91,6 +102,58 @@ async def provider_status(_: str = Depends(authenticate)) -> dict[str, Any]:
     settings = get_settings()
     configured = {p.name for alias in ("fast", "balanced", "premium", "economy") for p in configured_providers(settings, alias)}
     return {"providers": sorted(configured), "circuits": configured_breaker(settings).snapshot()}
+
+
+@app.post("/v1/media/image-to-video")
+async def image_to_video(body: ImageToVideoRequest, _: str = Depends(authenticate)):
+    settings = get_settings()
+    if not media_enabled(settings):
+        raise HTTPException(status_code=503, detail="NahaMedia image-to-video is not configured")
+    try:
+        job = await submit_image_to_video(
+            image_url=body.image_url,
+            prompt=body.prompt,
+            model=body.model,
+            duration_seconds=body.duration_seconds,
+            aspect_ratio=body.aspect_ratio,
+            resolution=body.resolution,
+            settings=settings,
+        )
+    except MediaProviderError as exc:
+        logger.warning(
+            "media_provider_error provider=%s status=%s detail=%s",
+            exc.provider,
+            exc.status_code,
+            exc.detail,
+        )
+        raise HTTPException(
+            status_code=502 if not exc.status_code or exc.status_code >= 500 else exc.status_code,
+            detail={"message": "Image-to-video provider failed"},
+        ) from exc
+    return {
+        "id": job.id,
+        "provider": job.provider,
+        "provider_job_id": job.provider_job_id,
+        "status": job.status,
+        "video_url": job.video_url,
+        "created_at": job.created_at,
+    }
+
+
+@app.get("/v1/media/jobs/{job_id}")
+async def image_to_video_job(job_id: str, _: str = Depends(authenticate)):
+    job = await get_image_to_video_job(job_id, get_settings())
+    if job is None:
+        raise HTTPException(status_code=404, detail="Media job not found")
+    return {
+        "id": job.id,
+        "provider": job.provider,
+        "provider_job_id": job.provider_job_id,
+        "status": job.status,
+        "video_url": job.video_url,
+        "error": job.error,
+        "created_at": job.created_at,
+    }
 
 
 @app.post("/v1/chat/completions")
