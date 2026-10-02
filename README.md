@@ -23,6 +23,12 @@ NahaLabs apps
      +--> Cerebras
      +--> Mistral
      +--> OpenRouter
+
+NahaMedia (optional)
+     |
+     +--> image-to-video provider adapter
+     +--> Spyce-compatible I2V endpoint
+     +--> future replaceable providers
 ```
 
 ## V1 capabilities
@@ -50,6 +56,8 @@ GET  /ready
 GET  /v1/models
 GET  /v1/providers
 POST /v1/chat/completions
+POST /v1/media/image-to-video
+GET  /v1/media/jobs/{job_id}
 ```
 
 Example:
@@ -86,6 +94,36 @@ Provider credentials are environment variables and must never be committed. See 
 Resilience controls include request timeout, retries per provider, circuit failure threshold, and circuit cooldown.
 
 The current circuit breaker is intentionally process-local so NahaLLM can run cheaply on a free Render instance. Redis-backed shared state is a later upgrade when horizontal scaling requires it.
+
+## NahaMedia image-to-video
+
+NahaLLM now exposes a provider-independent image-to-video contract behind a feature flag. The client submits a public image URL plus a motion prompt and receives a NahaMedia job ID. The job can then be polled until the provider returns a video URL.
+
+The first adapter is Spyce-configurable rather than hard-coded to an undocumented endpoint. Set `NAHAMEDIA_ENABLED=true`, `SPYCE_API_KEY`, `SPYCE_I2V_SUBMIT_URL`, and `SPYCE_I2V_STATUS_URL_TEMPLATE` on the server. NahaLLM never logs the source image or prompt content by default.
+
+Example:
+
+```bash
+curl http://localhost:8000/v1/media/image-to-video \\
+  -H "Authorization: Bearer <naha-app-key>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "image_url": "https://example.com/product.jpg",
+    "prompt": "Slow camera push-in with natural product movement",
+    "duration_seconds": 6,
+    "aspect_ratio": "16:9",
+    "resolution": "720p"
+  }'
+```
+
+Then poll:
+
+```bash
+curl http://localhost:8000/v1/media/jobs/<job-id> \\
+  -H "Authorization: Bearer <naha-app-key>"
+```
+
+The media layer is intentionally separate from chat routing so LeadMachine, Flavourly and other NahaLabs apps can consume one stable interface while providers are replaced later.
 
 ## Architecture principles
 
