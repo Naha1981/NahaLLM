@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     nahallm_circuit_failure_threshold: int = 3
     nahallm_circuit_cooldown_seconds: float = 30.0
 
+    nahamedia_enabled: bool = False
+    nahallm_media_request_timeout_seconds: float = 120.0
+    spyce_api_key: str = ""
+    spyce_i2v_submit_url: str = ""
+    spyce_i2v_status_url_template: str = ""
+    spyce_i2v_model: str = "cogvideox-5b-i2v"
+
     groq_api_key: str = ""
     groq_base_url: str = "https://api.groq.com/openai/v1"
     groq_model_fast: str = "llama-3.1-8b-instant"
