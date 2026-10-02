@@ -2,7 +2,7 @@ import httpx
 import pytest
 
 from app.config import Settings
-from app.media import clear_jobs, get_image_to_video_job, submit_image_to_video
+from app.media import MediaProviderError, clear_jobs, get_image_to_video_job, submit_image_to_video
 
 
 @pytest.fixture(autouse=True)
@@ -26,7 +26,6 @@ async def test_media_submit_and_poll(monkeypatch):
 
     class FakeClient:
         async def post(self, *args, **kwargs):
-
             calls.append(("post", args, kwargs))
             return httpx.Response(200, json={"job_id": "spyce-123", "status": "queued"})
 
@@ -68,7 +67,7 @@ async def test_media_disabled_without_provider_config():
         nahamedia_enabled=False,
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(MediaProviderError):
         await submit_image_to_video(
             image_url="https://cdn.example/input.jpg",
             prompt="animate",
