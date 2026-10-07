@@ -40,26 +40,40 @@ async def close_http_client() -> None:
         _http_client = None
 
 
+def _freellmapi_provider(settings: Settings, alias: str) -> Provider:
+    routing_model = {
+        "fast": "auto:fast",
+        "balanced": "auto:balanced",
+        "premium": "auto:smart",
+        "economy": "auto:cheap",
+    }[alias]
+    return Provider("freellmapi", settings.freellmapi_api_key, settings.freellmapi_base_url, routing_model)
+
+
 def configured_providers(settings: Settings, alias: str) -> list[Provider]:
     candidates = {
         "fast": [
             Provider("groq", settings.groq_api_key, settings.groq_base_url, settings.groq_model_fast),
             Provider("cerebras", settings.cerebras_api_key, settings.cerebras_base_url, settings.cerebras_model_fast),
             Provider("gemini", settings.gemini_api_key, settings.gemini_base_url, settings.gemini_model_balanced),
+            _freellmapi_provider(settings, alias),
         ],
         "balanced": [
             Provider("gemini", settings.gemini_api_key, settings.gemini_base_url, settings.gemini_model_balanced),
             Provider("groq", settings.groq_api_key, settings.groq_base_url, settings.groq_model_balanced),
             Provider("cerebras", settings.cerebras_api_key, settings.cerebras_base_url, settings.cerebras_model_balanced),
             Provider("mistral", settings.mistral_api_key, settings.mistral_base_url, settings.mistral_model_balanced),
+            _freellmapi_provider(settings, alias),
         ],
         "premium": [
             Provider("gemini", settings.gemini_api_key, settings.gemini_base_url, settings.gemini_model_premium),
             Provider("openrouter", settings.openrouter_api_key, settings.openrouter_base_url, settings.openrouter_model_premium),
+            _freellmapi_provider(settings, alias),
         ],
         "economy": [
             Provider("groq", settings.groq_api_key, settings.groq_base_url, settings.groq_model_fast),
             Provider("cerebras", settings.cerebras_api_key, settings.cerebras_base_url, settings.cerebras_model_fast),
+            _freellmapi_provider(settings, alias),
         ],
     }
     return [p for p in candidates.get(alias, []) if p.api_key and p.model]

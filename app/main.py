@@ -83,6 +83,7 @@ async def ready() -> JSONResponse:
         "gemini": bool(settings.gemini_api_key),
         "mistral": bool(settings.mistral_api_key),
         "openrouter": bool(settings.openrouter_api_key and settings.openrouter_model_premium),
+        "freellmapi": bool(settings.freellmapi_api_key),
     }
     providers["nahamedia_spyce_i2v"] = media_enabled(settings)
     ready_state = any(providers.values()) and bool(settings.api_keys)

@@ -23,6 +23,7 @@ NahaLabs apps
      +--> Cerebras
      +--> Mistral
      +--> OpenRouter
+     +--> FreeLLMAPI (optional fallback gateway)
 
 NahaMedia (optional)
      |
@@ -91,6 +92,12 @@ curl http://localhost:8000/v1/chat/completions \
 
 Provider credentials are environment variables and must never be committed. See `.env.example`.
 
+### Optional FreeLLMAPI fallback
+
+NahaLLM can use a self-hosted FreeLLMAPI instance as the final fallback for every chat alias. FreeLLMAPI exposes an OpenAI-compatible `/v1/chat/completions` endpoint and supports router models such as `auto:fast`, `auto:balanced`, `auto:smart`, and `auto:cheap`. NahaLLM maps `fast`, `balanced`, `premium`, and `economy` to those strategies respectively. This keeps FreeLLMAPI behind the NahaLLM contract, so applications do not depend on it directly.
+
+Set `FREELLMAPI_API_KEY` and `FREELLMAPI_BASE_URL` on the NahaLLM server. The default URL is `http://127.0.0.1:3001/v1`, which is suitable when both services run on the same machine. For a deployed NahaLLM instance, use a private/reachable FreeLLMAPI endpoint instead.
+
 Resilience controls include request timeout, retries per provider, circuit failure threshold, and circuit cooldown.
 
 The current circuit breaker is intentionally process-local so NahaLLM can run cheaply on a free Render instance. Redis-backed shared state is a later upgrade when horizontal scaling requires it.
@@ -130,10 +137,11 @@ The media layer is intentionally separate from chat routing so LeadMachine, Flav
 1. Apps depend only on NahaLLM, never directly on providers.
 2. Provider keys stay server-side.
 3. Routing is deterministic and observable before adding sophisticated optimisation.
-4. Provider differences are isolated behind adapters.
-5. Start on free infrastructure and free provider tiers; add paid providers only when required.
-6. Keep OmniRoute/NaraRouter or any third-party router replaceable rather than a hard dependency.
-7. Future multimodal capabilities, embeddings, tool calling, and provider-specific capabilities can be added without breaking the V1 interface.
+4. FreeLLMAPI is an optional fallback behind NahaLLM, never a direct application dependency.
+5. Provider differences are isolated behind adapters.
+6. Start on free infrastructure and free provider tiers; add paid providers only when required.
+7. Keep OmniRoute/NaraRouter, FreeLLMAPI, or any third-party router replaceable rather than a hard dependency.
+8. Future multimodal capabilities, embeddings, tool calling, and provider-specific capabilities can be added without breaking the V1 interface.
 
 ## NahaLabs consumers
 
