@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     spyce_i2v_status_url_template: str = ""
     spyce_i2v_model: str = "cogvideox-5b-i2v"
 
+    # Optional FreeLLMAPI OpenAI-compatible fallback gateway.
+    # Keep the unified key server-side. FreeLLMAPI can run locally or at a
+    # private network endpoint; it is disabled when the key is empty.
+    freellmapi_api_key: str = ""
+    freellmapi_base_url: str = "http://127.0.0.1:3001/v1"
+
     groq_api_key: str = ""
     groq_base_url: str = "https://api.groq.com/openai/v1"
     groq_model_fast: str = "llama-3.1-8b-instant"
